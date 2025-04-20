@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"flag"
+	"fmt"
 	v1 "github.com/consensys/linea-monorepo/prover/lib/compressor/blob/v1"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"golang.org/x/exp/constraints"
@@ -74,12 +75,14 @@ func main() {
 	startNum := findBlockByDate(parseDate(*flagStartDate))
 	endNum := findBlockByDate(parseDate(*flagEndDate))
 
+	var reporter *progressReporter
 	outFile := io.Writer(os.Stdout)
 	if *flagOut != "" {
 		file, err := os.Create(*flagOut)
 		assertNoError(err)
 		defer assertNoError(file.Close())
 		outFile = file
+		reporter = &progressReporter{}
 	}
 	out := newWriterWithCounter(outFile)
 
@@ -90,6 +93,9 @@ func main() {
 	}
 
 	if *flagSize > 0 {
+		if reporter != nil {
+			reporter.n = *flagSize
+		}
 		span := big.NewInt(endNum - startNum)
 		startNum := big.NewInt(startNum)
 
@@ -97,10 +103,19 @@ func main() {
 			blockNum, err := rand.Int(rand.Reader, span)
 			assertNoError(err)
 			writeBlock(blockNum.Add(blockNum, startNum))
+			if reporter != nil {
+				reporter.update(out.Written(), "bytes")
+			}
 		}
 	} else {
+		if reporter != nil {
+			reporter.n = uint(endNum - startNum)
+		}
 		for i := startNum; i < endNum; i++ {
 			writeBlock(big.NewInt(i))
+			if reporter != nil {
+				reporter.update(uint(i-startNum), "blocks")
+			}
 		}
 	}
 }
@@ -131,4 +146,28 @@ func assertNoError(err error) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+type progressReporter struct {
+	n              uint  // max value
+	pct            uint  // current percentage
+	lastReportTime int64 // last time reported
+}
+
+func newProgressReporter(n uint) *progressReporter {
+	return &progressReporter{n: n, lastReportTime: time.Now().Unix()}
+}
+
+func (r *progressReporter) update(i uint, objectName string) {
+	newPct := i * 100 / r.n
+	now := time.Now().Unix()
+	if newPct != r.pct || now-r.lastReportTime > 30 {
+		of := ""
+		if objectName != "" {
+			of = fmt.Sprintf(" of %s", objectName)
+		}
+		fmt.Printf("%d%%%s (%d/%d)\n", newPct, of, i, r.n)
+	}
+	r.pct = newPct
+	r.lastReportTime = now
 }
