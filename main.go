@@ -20,7 +20,7 @@ var (
 	flagStartDate = flag.String("start-date", "-30d", "Start date for blocks (start with - for relative to now)")
 	flagEndDate   = flag.String("end-date", "now", "End date for blocks (start with - for relative to now)")
 	flagUrl       = flag.String("url", "http://localhost:8545", "RPC URL")
-	flagSize      = flag.Uint("max", 0, "Maximum byte size of randomly chosen blocks. If 0, all blocks are written in succession.")
+	flagSize      = flag.Uint("max", 867, "Maximum size of randomly chosen blocks in MB. If 0, all blocks are written in succession.")
 	flagOut       = flag.String("out", "blocks/", "Output file prefix for blocks. It will be written as blobs, with names consisting of a number appended to the argument.")
 	flagBlobSize  = flag.Uint("blobsize", 131072, "Size of each blob in bytes")
 	client        *ethclient.Client
@@ -105,13 +105,15 @@ func main() {
 		assertNoError(v1.EncodeBlockForCompression(block, out))
 	}
 
-	if *flagSize > 0 {
-		reporter.n = *flagSize
+	maxSize := *flagSize * 1024 * 1024
+
+	if maxSize > 0 {
+		reporter.n = maxSize
 
 		span := big.NewInt(endNum - startNum)
 		startNum := big.NewInt(startNum)
 
-		for out.Written() < *flagSize {
+		for out.Written() < maxSize {
 			blockNum, err := rand.Int(rand.Reader, span)
 			assertNoError(err)
 			writeBlock(blockNum.Add(blockNum, startNum))
