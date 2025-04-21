@@ -97,7 +97,7 @@ func main() {
 
 	var reporter progressReporter
 
-	out := newWriterWithCounter(*flagOut)
+	out := newWriterWithCounter(*flagOut, *flagBlobSize)
 
 	writeBlock := func(blockNum *big.Int) {
 		block, err := client.BlockByNumber(context.Background(), blockNum)
