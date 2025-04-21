@@ -140,7 +140,7 @@ type writer struct {
 }
 
 func newWriterWithCounter(namePrefix string, blobSize uint) *writer {
-	file, err := os.Create(namePrefix + "-0.blob")
+	file, err := os.Create(namePrefix + "0.blob")
 	assertNoError(err)
 
 	return &writer{file: file, namePrefix: namePrefix, blobSize: blobSize}
@@ -157,7 +157,7 @@ func (w *writer) Write(p []byte) (n int, err error) {
 		w.blobW0 = w.n
 		w.blobI++
 		assertNoError(w.file.Close())
-		w.file, err = os.Create(fmt.Sprintf("%s-%d.blob", w.namePrefix, w.blobI))
+		w.file, err = os.Create(fmt.Sprintf("%s%d.blob", w.namePrefix, w.blobI))
 		assertNoError(err)
 	}
 
