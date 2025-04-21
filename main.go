@@ -188,7 +188,7 @@ func (r *progressReporter) update(i uint, objectName string) {
 		if objectName != "" {
 			of = fmt.Sprintf(" of %s", objectName)
 		}
-		fmt.Printf("%d%%%s (%d/%d)\n", newPct, of, i, r.n)
+		fmt.Printf("%s %d%%%s (%d/%d)\n", time.Now().Format("2006-01-02 15:04:05"), newPct, of, i, r.n)
 	}
 	r.pct = newPct
 	r.lastReportTime = now
