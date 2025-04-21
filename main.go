@@ -100,7 +100,9 @@ func main() {
 	if *flagOut != "" {
 		file, err := os.Create(*flagOut)
 		assertNoError(err)
-		defer assertNoError(file.Close())
+		defer func() {
+			assertNoError(file.Close())
+		}()
 		outFile = file
 		reporter = &progressReporter{}
 	}
