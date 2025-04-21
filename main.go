@@ -12,30 +12,50 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
 var (
-	flagStartDate = flag.String("start-date", "-00-01-00", "Start date for blocks (start with - for relative to now)")
-	flagEndDate   = flag.String("end-date", "-00-00-00", "End date for blocks (start with - for relative to now)")
+	flagStartDate = flag.String("start-date", "-30d", "Start date for blocks (start with - for relative to now)")
+	flagEndDate   = flag.String("end-date", "now", "End date for blocks (start with - for relative to now)")
 	flagUrl       = flag.String("url", "http://localhost:8545", "RPC URL")
 	flagSize      = flag.Uint("max", 0, "Maximum byte size of randomly chosen blocks. If 0, all blocks are written in succession.")
 	flagOut       = flag.String("out", "", "Output file for blocks")
 	client        *ethclient.Client
 )
 
+// parseDate parses a date either in the format YYYY-MM-DD, or as a relative date, now, or in the past(e.g., -30d, -2m).
 func parseDate(date string) uint64 {
-	relative := false
-	if date[0] == '-' {
-		relative = true
-		date = date[1:]
+	now := uint64(time.Now().Unix())
+	if strings.ToLower(date) == "now" {
+		return now
 	}
-	parsedTime, err := time.Parse("2006-01-02", date)
+	if date[0] != '-' {
+		parsedTime, err := time.Parse("2006-01-02", date)
+		assertNoError(err)
+		return uint64(parsedTime.Unix())
+	}
+
+	// too simple to use regex
+	var unit uint64
+	switch strings.ToLower(date[len(date)-1:]) {
+	case "h":
+		unit = 60 * 60
+	case "d":
+		unit = 24 * 60 * 60
+	case "m":
+		unit = 30 * 24 * 60 * 60
+	case "y":
+		unit = 365 * 24 * 60 * 60
+	default:
+		panic(fmt.Sprintf("invalid date format: %s", date))
+	}
+	v, err := strconv.Atoi(date[1 : len(date)-1])
 	assertNoError(err)
-	if relative {
-		parsedTime = time.Now().Add(-parsedTime.Sub(time.Time{}))
-	}
-	return uint64(parsedTime.Unix())
+
+	return now - uint64(v)*unit
 }
 
 // binarySearchF returns the ceiling of a root to increasingF in the range [lower, upper),
