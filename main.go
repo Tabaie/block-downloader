@@ -22,7 +22,7 @@ var (
 	flagUrl       = flag.String("url", "http://localhost:8545", "RPC URL")
 	flagSize      = flag.Uint("max", 0, "Maximum byte size of randomly chosen blocks. If 0, all blocks are written in succession.")
 	flagOut       = flag.String("out", "blocks/", "Output file prefix for blocks. It will be written as blobs, with names consisting of a number appended to the argument.")
-	flagBlobSize  = flag.Uint("blobsize", 1024*1024, "Size of each blob in bytes")
+	flagBlobSize  = flag.Uint("blobsize", 131072, "Size of each blob in bytes")
 	client        *ethclient.Client
 )
 
