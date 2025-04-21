@@ -9,7 +9,6 @@ import (
 	v1 "github.com/consensys/linea-monorepo/prover/lib/compressor/blob/v1"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"golang.org/x/exp/constraints"
-	"io"
 	"math/big"
 	"os"
 	"strconv"
@@ -22,7 +21,8 @@ var (
 	flagEndDate   = flag.String("end-date", "now", "End date for blocks (start with - for relative to now)")
 	flagUrl       = flag.String("url", "http://localhost:8545", "RPC URL")
 	flagSize      = flag.Uint("max", 0, "Maximum byte size of randomly chosen blocks. If 0, all blocks are written in succession.")
-	flagOut       = flag.String("out", "", "Output file for blocks")
+	flagOut       = flag.String("out", "blocks/", "Output file prefix for blocks. It will be written as blobs, with names consisting of a number appended to the argument.")
+	flagBlobSize  = flag.Uint("blobsize", 1024*1024, "Size of each blob in bytes")
 	client        *ethclient.Client
 )
 
@@ -95,18 +95,9 @@ func main() {
 	startNum := findBlockByDate(parseDate(*flagStartDate))
 	endNum := findBlockByDate(parseDate(*flagEndDate))
 
-	var reporter *progressReporter
-	outFile := io.Writer(os.Stdout)
-	if *flagOut != "" {
-		file, err := os.Create(*flagOut)
-		assertNoError(err)
-		defer func() {
-			assertNoError(file.Close())
-		}()
-		outFile = file
-		reporter = &progressReporter{}
-	}
-	out := newWriterWithCounter(outFile)
+	var reporter progressReporter
+
+	out := newWriterWithCounter(*flagOut)
 
 	writeBlock := func(blockNum *big.Int) {
 		block, err := client.BlockByNumber(context.Background(), blockNum)
@@ -115,9 +106,8 @@ func main() {
 	}
 
 	if *flagSize > 0 {
-		if reporter != nil {
-			reporter.n = *flagSize
-		}
+		reporter.n = *flagSize
+
 		span := big.NewInt(endNum - startNum)
 		startNum := big.NewInt(startNum)
 
@@ -125,43 +115,61 @@ func main() {
 			blockNum, err := rand.Int(rand.Reader, span)
 			assertNoError(err)
 			writeBlock(blockNum.Add(blockNum, startNum))
-			if reporter != nil {
-				reporter.update(out.Written(), "bytes")
-			}
+
+			reporter.update(out.Written(), "bytes")
+
 		}
 	} else {
-		if reporter != nil {
-			reporter.n = uint(endNum - startNum)
-		}
+		reporter.n = uint(endNum - startNum)
+
 		for i := startNum; i < endNum; i++ {
 			writeBlock(big.NewInt(i))
-			if reporter != nil {
-				reporter.update(uint(i-startNum), "blocks")
-			}
+			reporter.update(uint(i-startNum), "blocks")
 		}
 	}
 }
 
-type writerWithCounter struct {
-	w io.Writer
-	n uint
+type writer struct {
+	file *os.File
+	n    uint
+
+	blobW0     uint // starting point for current blob
+	blobI      uint
+	namePrefix string
+	blobSize   uint
 }
 
-func newWriterWithCounter(w io.Writer) *writerWithCounter {
-	return &writerWithCounter{w: w}
+func newWriterWithCounter(namePrefix string, blobSize uint) *writer {
+	file, err := os.Create(namePrefix + "-0.blob")
+	assertNoError(err)
+
+	return &writer{file: file, namePrefix: namePrefix, blobSize: blobSize}
 }
 
-func (w *writerWithCounter) Write(p []byte) (n int, err error) {
-	n, err = w.w.Write(p)
+func (w *writer) Write(p []byte) (n int, err error) {
+	n, err = w.file.Write(p)
 	if err != nil {
 		return
 	}
 	w.n += uint(n)
+
+	if w.n-w.blobW0 >= w.blobSize {
+		w.blobW0 = w.n
+		w.blobI++
+		assertNoError(w.file.Close())
+		w.file, err = os.Create(fmt.Sprintf("%s-%d.blob", w.namePrefix, w.blobI))
+		assertNoError(err)
+	}
+
 	return
 }
 
-func (w *writerWithCounter) Written() uint {
+func (w *writer) Written() uint {
 	return w.n
+}
+
+func (w *writer) Close() {
+	assertNoError(w.file.Close())
 }
 
 func assertNoError(err error) {
